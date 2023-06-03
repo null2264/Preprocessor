@@ -20,19 +20,20 @@ plugins {
     groovy
 }
 
-group = "com.github.replaymod"
-version = "SNAPSHOT"
+group = "xyz.deftu"
+version = "0.1.0"
 
 val kotestVersion: String by project.extra
 
 gradlePlugin {
     plugins {
         register("preprocess") {
-            id = "com.replaymod.preprocess"
+            id = "xyz.deftu.gradle.preprocess"
             implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
         }
+
         register("preprocess-root") {
-            id = "com.replaymod.preprocess-root"
+            id = "xyz.deftu.gradle.preprocess-root"
             implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
         }
     }
@@ -50,8 +51,8 @@ tasks.withType<Test> {
 repositories {
     mavenLocal()
     mavenCentral()
-    maven(url = "https://jitpack.io")
-    maven(url = "https://maven.fabricmc.net")
+    maven(url = "https://jitpack.io/")
+    maven(url = "https://maven.fabricmc.net/")
 }
 
 dependencies {
