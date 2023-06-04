@@ -4,6 +4,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.booleans.shouldNotBeTrue
 import io.kotest.matchers.shouldBe
 
 class PreprocessorTests : FunSpec({
@@ -12,7 +13,10 @@ class PreprocessorTests : FunSpec({
             "one" to 1,
             "two" to 2,
             "t" to 1,
-            "f" to 0
+            "f" to 0,
+            "mc" to 11902,
+            "mcold" to 10809,
+            "fabric" to 1
     )
     with(CommentPreprocessor(vars)) {
         context("evalExpr") {
@@ -28,6 +32,22 @@ class PreprocessorTests : FunSpec({
                 "one == 1".evalExpr().shouldBeTrue()
                 "1 == zero".evalExpr().shouldBeFalse()
                 "1 == one".evalExpr().shouldBeTrue()
+            }
+            test("version checks") {
+                "mc == 11902".evalExpr().shouldBeTrue()
+                "mc == 1.19.2".evalExpr().shouldBeTrue()
+                "mc == 1_19_02".evalExpr().shouldBeTrue()
+                "mc == 11903".evalExpr().shouldBeFalse()
+                "mc == 1.19.3".evalExpr().shouldBeFalse()
+                "mc == 1_19_03".evalExpr().shouldBeFalse()
+                "mcold == 10809".evalExpr().shouldBeTrue()
+                "mcold == 1.8.9".evalExpr().shouldBeTrue()
+                "mcold == 1_08_09".evalExpr().shouldBeTrue()
+                "mcold == 10810".evalExpr().shouldBeFalse()
+            }
+            test("loader checks") {
+                "fabric".evalExpr().shouldBeTrue()
+                "fabric == 1".evalExpr().shouldBeTrue()
             }
             test("a != b") {
                 "one != 0".evalExpr().shouldBeTrue()
