@@ -25,27 +25,11 @@ version = "0.1.0"
 
 val kotestVersion: String by project.extra
 
-gradlePlugin {
-    plugins {
-        register("preprocess") {
-            id = "xyz.deftu.gradle.preprocess"
-            implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
-        }
-
-        register("preprocess-root") {
-            id = "xyz.deftu.gradle.preprocess-root"
-            implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
-        }
-    }
-}
-
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
-}
 
-tasks.withType<Test> {
-    useJUnitPlatform()
+    withSourcesJar()
 }
 
 repositories {
@@ -62,4 +46,65 @@ dependencies {
     implementation("net.fabricmc:tiny-mappings-parser:0.2.1.13")
     testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+}
+
+gradlePlugin {
+    plugins {
+        register("preprocess") {
+            id = "xyz.deftu.gradle.preprocess"
+            implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
+        }
+
+        register("preprocess-root") {
+            id = "xyz.deftu.gradle.preprocess-root"
+            implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
+        }
+    }
+}
+
+publishing {
+    val publishingUsername: String? = run {
+        return@run project.findProperty("deftu.publishing.username")?.toString() ?: System.getenv("DEFTU_PUBLISHING_USERNAME")
+    }
+
+    val publishingPassword: String? = run {
+        return@run project.findProperty("deftu.publishing.password")?.toString() ?: System.getenv("DEFTU_PUBLISHING_PASSWORD")
+    }
+
+    repositories {
+        mavenLocal()
+        if (publishingUsername != null && publishingPassword != null) {
+            fun MavenArtifactRepository.applyCredentials() {
+                authentication.create<BasicAuthentication>("basic")
+                credentials {
+                    username = publishingUsername
+                    password = publishingPassword
+                }
+            }
+
+            maven {
+                name = "DeftuReleases"
+                url = uri("https://maven.deftu.xyz/releases")
+                applyCredentials()
+            }
+
+            maven {
+                name = "DeftuSnapshots"
+                url = uri("https://maven.deftu.xyz/snapshots")
+                applyCredentials()
+            }
+        }
+    }
+}
+
+tasks {
+    withType<Test> {
+        useJUnitPlatform()
+    }
+
+    jar {
+        manifest {
+            attributes["Implementation-Version"] = version
+        }
+    }
 }
