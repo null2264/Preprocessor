@@ -11,6 +11,7 @@ import org.gradle.api.file.ConfigurableFileTree
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.compile.AbstractCompile
+import org.gradle.kotlin.dsl.listProperty
 import org.gradle.kotlin.dsl.mapProperty
 import org.gradle.kotlin.dsl.property
 import org.jetbrains.kotlin.backend.common.peek
@@ -313,7 +314,9 @@ open class PreprocessTask : DefaultTask() {
     }
 }
 
-class CommentPreprocessor(private val vars: Map<String, Int>) {
+class CommentPreprocessor(
+    private val vars: Map<String, Int>
+) {
     companion object {
         private val EXPR_PATTERN = Pattern.compile("(.+)(==|!=|<=|>=|<|>)(.+)")
         private val OR_PATTERN = Pattern.quote("||").toPattern()
@@ -322,8 +325,26 @@ class CommentPreprocessor(private val vars: Map<String, Int>) {
 
     var fail = false
 
-    private fun String.evalVarOrNull() = toIntOrNull() ?: vars[this]
-    private fun String.evalVar() = evalVarOrNull() ?: throw NoSuchElementException(this)
+    private fun String.evalVarOrNull() = cleanUpIfVersion().toIntOrNull() ?: vars[this]
+    private fun String.evalVar() = cleanUpIfVersion().evalVarOrNull() ?: throw NoSuchElementException(this)
+
+    private fun String.cleanUpIfVersion(): String {
+        // Verify that this could be a version
+        if (!matches("[\\d._+-]+".toRegex()))
+            return this
+
+        // Version handling
+        val matcher = Pattern.compile("(\\d+)\\.(\\d+)(?:\\.(\\d+))?").matcher(this)
+        if (matcher.matches()) {
+            val major = matcher.group(1) ?: "0"
+            val minor = matcher.group(2)?.padStart(2, '0') ?: "00"
+            val patch = matcher.group(3)?.padStart(2, '0') ?: "00"
+            return "$major$minor$patch"
+        }
+
+        // Underscore handling
+        return if (startsWith("_")) this else replace("_", "", false)
+    }
 
     internal fun String.evalExpr(): Boolean {
         split(OR_PATTERN).let { parts ->
@@ -331,6 +352,7 @@ class CommentPreprocessor(private val vars: Map<String, Int>) {
                 return parts.any { it.trim().evalExpr() }
             }
         }
+
         split(AND_PATTERN).let { parts ->
             if (parts.size > 1) {
                 return parts.all { it.trim().evalExpr() }
@@ -344,8 +366,10 @@ class CommentPreprocessor(private val vars: Map<String, Int>) {
 
         val matcher = EXPR_PATTERN.matcher(this)
         if (matcher.matches()) {
-            val lhs = matcher.group(1).trim().evalVar()
-            val rhs = matcher.group(3).trim().evalVar()
+            val leftExpr = matcher.group(1).trim()
+            val rightExpr = matcher.group(3).trim()
+            val lhs = leftExpr.evalVar()
+            val rhs = rightExpr.evalVar()
             return when (matcher.group(2)) {
                 "==" -> lhs == rhs
                 "!=" -> lhs != rhs
