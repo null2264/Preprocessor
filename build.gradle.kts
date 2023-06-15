@@ -20,8 +20,8 @@ plugins {
     groovy
 }
 
-group = "xyz.deftu"
-version = "0.1.0"
+group = "com.github.null2264"
+version = "SNAPSHOT"
 
 val kotestVersion: String by project.extra
 
@@ -43,7 +43,7 @@ dependencies {
     implementation(gradleApi())
     implementation(localGroovy())
     implementation("com.github.replaymod:remap:3a12dc2")
-    implementation("net.fabricmc:tiny-mappings-parser:0.2.1.13")
+    implementation("net.fabricmc:tiny-mappings-parser:0.3.0+build.17")
     testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
@@ -51,12 +51,12 @@ dependencies {
 gradlePlugin {
     plugins {
         register("preprocess") {
-            id = "xyz.deftu.gradle.preprocess"
+            id = "com.github.null2264.gradle.preprocess"
             implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
         }
 
         register("preprocess-root") {
-            id = "xyz.deftu.gradle.preprocess-root"
+            id = "com.github.null2264.gradle.preprocess-root"
             implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
         }
     }
