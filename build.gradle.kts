@@ -51,12 +51,12 @@ dependencies {
 gradlePlugin {
     plugins {
         register("preprocess") {
-            id = "com.github.null2264.gradle.preprocess"
+            id = "com.github.null2264.preprocess"
             implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
         }
 
         register("preprocess-root") {
-            id = "com.github.null2264.gradle.preprocess-root"
+            id = "com.github.null2264.preprocess-root"
             implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
         }
     }
