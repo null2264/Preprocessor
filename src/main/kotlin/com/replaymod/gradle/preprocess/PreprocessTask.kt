@@ -35,6 +35,7 @@ data class Keywords(
         val eval: String
 ) : Serializable
 
+@CacheableTask
 open class PreprocessTask : DefaultTask() {
     companion object {
         @JvmStatic
@@ -74,12 +75,14 @@ open class PreprocessTask : DefaultTask() {
 
     @InputFiles
     @SkipWhenEmpty
+    @PathSensitive(PathSensitivity.RELATIVE)
     fun getSourceFileTrees(): List<ConfigurableFileTree> {
         return entries.flatMap { it.source }.map { project.fileTree(it) }
     }
 
     @InputFiles
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     fun getOverwritesFileTrees(): List<ConfigurableFileTree> {
         return entries.mapNotNull { it.overwrites?.let(project::fileTree) }
     }
@@ -116,14 +119,17 @@ open class PreprocessTask : DefaultTask() {
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.NONE)
     var sourceMappings: File? = null
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.NONE)
     var destinationMappings: File? = null
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.NONE)
     var mapping: File? = null
 
     @Input
@@ -131,18 +137,22 @@ open class PreprocessTask : DefaultTask() {
 
     @InputDirectory
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     val jdkHome = project.objects.directoryProperty()
 
     @InputDirectory
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     val remappedjdkHome = project.objects.directoryProperty()
 
     @InputFiles
     @Optional
+    @CompileClasspath
     var classpath: FileCollection? = null
 
     @InputFiles
     @Optional
+    @CompileClasspath
     var remappedClasspath: FileCollection? = null
 
     @Input
