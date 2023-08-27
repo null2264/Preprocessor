@@ -36,6 +36,7 @@ repositories {
     mavenCentral()
     maven(url = "https://jitpack.io/")
     maven(url = "https://maven.fabricmc.net/")
+    maven(url = "https://maven.deftu.xyz/releases/")
 }
 
 dependencies {
