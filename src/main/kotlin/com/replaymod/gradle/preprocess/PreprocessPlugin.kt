@@ -290,7 +290,7 @@ internal abstract class BakeNamedToOfficialMappings : DefaultTask() {
             val tiny = mappings.file.inputStream().use { TinyMappingFactory.loadWithDetection(it.bufferedReader()) }
             TinyReader(tiny, "named", "official").read()
         } else {
-            val iMappings = namedToIntermediaryMappings.get()
+            val iMappings = namedToIntermediaryMappings.get()!!
             val iMapSet = readMappings(iMappings.format, iMappings.file.toPath())
             val oMapSet = readMappings(mappings.format, mappings.file.toPath())
             oMapSet.join(iMapSet.reverse()).reverse()
