@@ -336,7 +336,7 @@ class CommentPreprocessor(
     var fail = false
 
     private fun String.evalVarOrNull() = cleanUpIfVersion().toIntOrNull() ?: vars[this]
-    private fun String.evalVar() = cleanUpIfVersion().evalVarOrNull() ?: throw NoSuchElementException(this)
+    private fun String.evalVar() = cleanUpIfVersion().evalVarOrNull() ?: throw NoSuchElementException("\'$this\' is not in $vars")
 
     private fun String.cleanUpIfVersion(): String {
         // Verify that this could be a version
