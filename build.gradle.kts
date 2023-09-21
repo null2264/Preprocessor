@@ -15,6 +15,7 @@
  */
 
 plugins {
+    kotlin("jvm") version("1.9.0")
     `kotlin-dsl`
     `maven-publish`
     groovy
@@ -26,10 +27,8 @@ version = "SNAPSHOT"
 val kotestVersion: String by project.extra
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
-
     withSourcesJar()
+    toolchain.languageVersion.set(JavaLanguageVersion.of(8))
 }
 
 repositories {
@@ -37,12 +36,13 @@ repositories {
     mavenCentral()
     maven(url = "https://jitpack.io/")
     maven(url = "https://maven.fabricmc.net/")
+    maven(url = "https://maven.deftu.xyz/releases/")
 }
 
 dependencies {
     implementation(gradleApi())
     implementation(localGroovy())
-    implementation("com.github.replaymod:remap:3a12dc2")
+    implementation("com.github.replaymod:Remap:0.1.1")
     implementation("net.fabricmc:tiny-mappings-parser:0.3.0+build.17")
     testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
