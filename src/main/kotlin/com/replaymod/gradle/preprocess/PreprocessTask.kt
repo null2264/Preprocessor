@@ -35,6 +35,7 @@ data class Keywords(
         val eval: String
 ) : Serializable
 
+@CacheableTask
 open class PreprocessTask : DefaultTask() {
     companion object {
         @JvmStatic
@@ -74,12 +75,14 @@ open class PreprocessTask : DefaultTask() {
 
     @InputFiles
     @SkipWhenEmpty
+    @PathSensitive(PathSensitivity.RELATIVE)
     fun getSourceFileTrees(): List<ConfigurableFileTree> {
         return entries.flatMap { it.source }.map { project.fileTree(it) }
     }
 
     @InputFiles
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     fun getOverwritesFileTrees(): List<ConfigurableFileTree> {
         return entries.mapNotNull { it.overwrites?.let(project::fileTree) }
     }
@@ -116,14 +119,17 @@ open class PreprocessTask : DefaultTask() {
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.NONE)
     var sourceMappings: File? = null
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.NONE)
     var destinationMappings: File? = null
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.NONE)
     var mapping: File? = null
 
     @Input
@@ -131,18 +137,22 @@ open class PreprocessTask : DefaultTask() {
 
     @InputDirectory
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     val jdkHome = project.objects.directoryProperty()
 
     @InputDirectory
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     val remappedjdkHome = project.objects.directoryProperty()
 
     @InputFiles
     @Optional
+    @CompileClasspath
     var classpath: FileCollection? = null
 
     @InputFiles
     @Optional
+    @CompileClasspath
     var remappedClasspath: FileCollection? = null
 
     @Input
@@ -326,7 +336,7 @@ class CommentPreprocessor(
     var fail = false
 
     private fun String.evalVarOrNull() = cleanUpIfVersion().toIntOrNull() ?: vars[this]
-    private fun String.evalVar() = cleanUpIfVersion().evalVarOrNull() ?: throw NoSuchElementException(this)
+    private fun String.evalVar() = cleanUpIfVersion().evalVarOrNull() ?: throw NoSuchElementException("\'$this\' is not in $vars")
 
     private fun String.cleanUpIfVersion(): String {
         // Verify that this could be a version
@@ -411,7 +421,7 @@ class CommentPreprocessor(
             val trimmed = line.trim()
             val mapped = if (trimmed.startsWith(kws.`if`)) {
                 val result = evalCondition(trimmed.substring(kws.`if`.length))
-                stack.push(IfStackEntry(result, elseFound = false, trueFound = result))
+                stack.push(IfStackEntry(result, n, elseFound = false, trueFound = result))
                 indentStack.push(line.indentation)
                 active = active && result
                 line
@@ -433,7 +443,7 @@ class CommentPreprocessor(
                 } else {
                     val result = evalCondition(trimmed.substring(kws.elseif.length))
                     stack.pop()
-                    stack.push(IfStackEntry(result, elseFound = false, trueFound = result))
+                    stack.push(IfStackEntry(result, n, elseFound = false, trueFound = result))
                     stack.all { it.currentValue }
                 }
                 line
@@ -442,14 +452,14 @@ class CommentPreprocessor(
                     throw ParserException("Unexpected else in line $n of $fileName")
                 }
                 val entry = stack.pop()
-                stack.push(IfStackEntry(!entry.trueFound, elseFound = true, trueFound = entry.trueFound))
+                stack.push(IfStackEntry(!entry.trueFound, n, elseFound = true, trueFound = entry.trueFound))
                 indentStack.pop()
                 indentStack.push(line.indentation)
                 active = stack.all { it.currentValue }
                 line
             } else if (trimmed.startsWith(kws.ifdef)) {
                 val result = vars.containsKey(trimmed.substring(kws.ifdef.length))
-                stack.push(IfStackEntry(result, elseFound = false, trueFound = result))
+                stack.push(IfStackEntry(result, n, elseFound = false, trueFound = result))
                 indentStack.push(line.indentation)
                 active = active && result
                 line
@@ -515,7 +525,7 @@ class CommentPreprocessor(
             mapped
         }.also {
             if (stack.isNotEmpty()) {
-                throw ParserException("Missing endif in $fileName")
+                throw ParserException("Missing endif on line ${stack.peek()?.lineno} of $fileName")
             }
         }
     }
@@ -538,6 +548,7 @@ class CommentPreprocessor(
 
     data class IfStackEntry(
         var currentValue: Boolean,
+        var lineno: Int,
         var elseFound: Boolean = false,
         var trueFound: Boolean = false
     )
