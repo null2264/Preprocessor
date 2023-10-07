@@ -21,7 +21,7 @@ plugins {
     groovy
 }
 
-group = "xyz.deftu"
+group = "dev.deftu"
 version = "0.4.1"
 
 val kotestVersion: String by project.extra
@@ -51,12 +51,12 @@ dependencies {
 gradlePlugin {
     plugins {
         register("preprocess") {
-            id = "xyz.deftu.gradle.preprocess"
+            id = "dev.deftu.gradle.preprocess"
             implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
         }
 
         register("preprocess-root") {
-            id = "xyz.deftu.gradle.preprocess-root"
+            id = "dev.deftu.gradle.preprocess-root"
             implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
         }
     }
