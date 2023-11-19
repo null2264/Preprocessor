@@ -37,13 +37,12 @@ repositories {
     maven(url = "https://jitpack.io/")
     maven(url = "https://maven.fabricmc.net/")
     maven(url = "https://maven.aap.my.id/releases/")
-    maven(url = "https://maven.deftu.xyz/releases/")
 }
 
 dependencies {
     implementation(gradleApi())
     implementation(localGroovy())
-    implementation("com.github.replaymod:Remap:0.1.1")
+    implementation("io.github.null2264:remap:1.0-SNAPSHOT")
     implementation("net.fabricmc:tiny-mappings-parser:0.3.0+build.17")
     testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
