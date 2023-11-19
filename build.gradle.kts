@@ -21,7 +21,7 @@ plugins {
     groovy
 }
 
-group = "com.github.null2264"
+group = "io.github.null2264"
 version = "SNAPSHOT"
 
 val kotestVersion: String by project.extra
@@ -51,47 +51,36 @@ dependencies {
 gradlePlugin {
     plugins {
         register("preprocess") {
-            id = "com.github.null2264.preprocess"
+            id = "io.github.null2264.preprocess"
             implementationClass = "com.replaymod.gradle.preprocess.PreprocessPlugin"
         }
 
         register("preprocess-root") {
-            id = "com.github.null2264.preprocess-root"
+            id = "io.github.null2264.preprocess-root"
             implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
         }
     }
 }
 
 publishing {
-    val publishingUsername: String? = run {
-        return@run project.findProperty("deftu.publishing.username")?.toString() ?: System.getenv("DEFTU_PUBLISHING_USERNAME")
-    }
-
     val publishingPassword: String? = run {
-        return@run project.findProperty("deftu.publishing.password")?.toString() ?: System.getenv("DEFTU_PUBLISHING_PASSWORD")
+        return@run System.getenv("MAVEN_PASS")
     }
 
     repositories {
         mavenLocal()
-        if (publishingUsername != null && publishingPassword != null) {
+        if (publishingPassword != null) {
             fun MavenArtifactRepository.applyCredentials() {
                 authentication.create<BasicAuthentication>("basic")
+            }
+
+            maven {
+                url = uri("https://maven.aap.my.id/releases")
+                applyCredentials()
                 credentials {
-                    username = publishingUsername
+                    username = "admin"
                     password = publishingPassword
                 }
-            }
-
-            maven {
-                name = "DeftuReleases"
-                url = uri("https://maven.deftu.xyz/releases")
-                applyCredentials()
-            }
-
-            maven {
-                name = "DeftuSnapshots"
-                url = uri("https://maven.deftu.xyz/snapshots")
-                applyCredentials()
             }
         }
     }
