@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "io.github.null2264"
-version = "SNAPSHOT"
+version = "1.0-SNAPSHOT"
 
 val kotestVersion: String by project.extra
 
