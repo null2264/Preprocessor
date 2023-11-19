@@ -1,0 +1,23 @@
+name: build
+on: [pull_request, push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: gradle/wrapper-validation-action@v1
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: chmod +x ./gradlew
+      - name: Build with Gradle
+        run: ./gradlew build --stacktrace
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: Results
+          path: build/reports/
