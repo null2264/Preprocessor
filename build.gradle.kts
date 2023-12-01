@@ -21,6 +21,8 @@ plugins {
     groovy
 }
 
+val ENV = { key: String -> System.getenv(key) }
+
 group = "io.github.null2264"
 version = "1.0-SNAPSHOT"
 
@@ -36,7 +38,7 @@ repositories {
     mavenCentral()
     maven(url = "https://jitpack.io/")
     maven(url = "https://maven.fabricmc.net/")
-    maven(url = "https://maven.aap.my.id/releases/")
+    maven(url = "https://maven.aap.my.id/")
 }
 
 dependencies {
@@ -62,6 +64,11 @@ gradlePlugin {
     }
 }
 
+
+if (ENV("S3_ENDPOINT") != null) {
+	System.setProperty("org.gradle.s3.endpoint", ENV("S3_ENDPOINT"))
+}
+
 publishing {
     val publishingPassword: String? = run {
         return@run System.getenv("MAVEN_PASS")
@@ -69,17 +76,12 @@ publishing {
 
     repositories {
         mavenLocal()
-        if (publishingPassword != null) {
-            fun MavenArtifactRepository.applyCredentials() {
-                authentication.create<BasicAuthentication>("basic")
-            }
-
+        if (ENV("AWS_ACCESS_KEY") != null && ENV("AWS_SECRET_KEY") != null) {
             maven {
-                url = uri("https://maven.aap.my.id/releases")
-                applyCredentials()
-                credentials {
-                    username = "admin"
-                    password = publishingPassword
+                url = uri("s3://maven")
+                credentials(AwsCredentials::class) {
+                    accessKey = ENV("AWS_ACCESS_KEY")
+                    secretKey = ENV("AWS_SECRET_KEY")
                 }
             }
         }

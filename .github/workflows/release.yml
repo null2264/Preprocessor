@@ -17,4 +17,6 @@ jobs:
       - name: Build and publish
         run: ./gradlew build publish --stacktrace
         env:
-          MAVEN_PASS: ${{ secrets.MAVEN_PASS }}
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
