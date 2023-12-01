@@ -28,9 +28,14 @@ version = "1.0-SNAPSHOT"
 
 val kotestVersion: String by project.extra
 
+tasks.withType<KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
 java {
     withSourcesJar()
-    toolchain.languageVersion.set(JavaLanguageVersion.of(8))
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 repositories {
