@@ -1,12 +1,20 @@
 package com.replaymod.gradle.preprocess
 
+import org.gradle.api.Project
+import org.gradle.api.file.RegularFileProperty
 import java.io.File
 
-open class RootPreprocessExtension : ProjectGraphNodeDSL {
+open class RootPreprocessExtension(project: Project) : ProjectGraphNodeDSL {
+    val mainProjectFile: RegularFileProperty = project.objects.fileProperty()
+
     var rootNode: ProjectGraphNode? = null
         get() = field ?: linkNodes()?.also { field = it }
 
     private val nodes = mutableSetOf<Node>()
+
+    init {
+        mainProjectFile.convention(project.layout.projectDirectory.file("versions/mainProject"))
+    }
 
     fun createNode(project: String, mcVersion: Int, mappings: String): Node {
         return Node(project, mcVersion, mappings).also { nodes.add(it) }

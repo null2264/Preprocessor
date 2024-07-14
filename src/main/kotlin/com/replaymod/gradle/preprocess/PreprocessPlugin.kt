@@ -37,7 +37,7 @@ class PreprocessPlugin : Plugin<Project> {
         val graph = rootExtension.rootNode ?: throw IllegalStateException("Preprocess graph was not configured.")
         val projectNode = graph.findNode(project.name) ?: throw IllegalStateException("Prepocess graph does not contain ${project.name}.")
 
-        val coreProjectFile = project.file("../mainProject")
+        val coreProjectFile = rootExtension.mainProjectFile.asFile.get()
         val coreProject = coreProjectFile.readText().trim()
         val mcVersion = projectNode.mcVersion
         project.extra["mcVersion"] = mcVersion
