@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "dev.deftu"
-version = "0.5.1"
+version = "0.6.0"
 
 val kotestVersion: String by project.extra
 
