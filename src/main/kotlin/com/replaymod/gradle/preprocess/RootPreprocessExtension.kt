@@ -3,6 +3,12 @@ package com.replaymod.gradle.preprocess
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFileProperty
 import java.io.File
+import javax.inject.Inject
+
+open class RootPreprocessExtension @Inject constructor(
+    objects: ObjectFactory,
+) : ProjectGraphNodeDSL {
+    val strictExtraMappings = objects.property<Boolean>() // defaults to `false` for backwards compatibility
 
 open class RootPreprocessExtension(project: Project) : ProjectGraphNodeDSL {
     val mainProjectFile: RegularFileProperty = project.objects.fileProperty()
