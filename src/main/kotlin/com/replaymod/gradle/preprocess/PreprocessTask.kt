@@ -222,6 +222,10 @@ open class PreprocessTask @Inject constructor(
 
     @TaskAction
     fun preprocess() {
+        preprocess(mapping, entries)
+    }
+
+    fun preprocess(mapping: File?, entries: List<InOut>) {
         data class Entry(val relPath: String, val inBase: Path, val outBase: Path, val overwritesBase: Path?)
 
         val sourceFiles: List<Entry> = entries.flatMap { inOut ->
@@ -238,7 +242,6 @@ open class PreprocessTask @Inject constructor(
 
         var mappedSources: Map<String, Pair<String, List<Pair<Int, String>>>>? = null
 
-        val mapping = mapping
         val classpath = classpath
         val sourceMappingsFile = sourceMappings
         val destinationMappingsFile = destinationMappings
