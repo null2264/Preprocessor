@@ -212,7 +212,7 @@ open class PreprocessTask @Inject constructor(
     )
     fun compileTask(task: AbstractCompile) {
         dependsOn(task)
-        classpath = (classpath ?: layout.files()) + task.classpath + layout.files(task.destinationDirectory)
+        classpath = (classpath ?: project.files()) + task.classpath + project.files(task.destinationDirectory)
     }
 
     @TaskAction
