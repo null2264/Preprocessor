@@ -16,8 +16,6 @@ import org.gradle.api.file.FileTree
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.tasks.*
-import org.gradle.api.tasks.compile.AbstractCompile
-import org.gradle.kotlin.dsl.listProperty
 import org.gradle.kotlin.dsl.mapProperty
 import org.gradle.kotlin.dsl.property
 import org.jetbrains.kotlin.backend.common.peek
@@ -104,31 +102,6 @@ open class PreprocessTask @Inject constructor(
         return entries.map { it.generated }
     }
 
-    private fun updateFirstInOut(update: InOut.() -> InOut) {
-        val first = entries.removeFirstOrNull()
-            ?: InOut(layout.files(), File("invalid"), null)
-        first.update()
-        entries.add(0, first)
-    }
-
-    @Deprecated("Instead add an entry to `entries`.")
-    @get:Internal
-    var generated: File?
-        get() = entries.firstOrNull()?.generated
-        set(value) = updateFirstInOut { copy(generated = value ?: File("invalid")) }
-
-    @Deprecated("Instead add an entry to `entries`.")
-    @get:Internal
-    var source: FileCollection?
-        get() = entries.firstOrNull()?.source
-        set(value) = updateFirstInOut { copy(source = value ?: layout.files()) }
-
-    @Deprecated("Instead add an entry to `entries`.")
-    @get:Internal
-    var overwrites: File?
-        get() = entries.firstOrNull()?.overwrites
-        set(value) = updateFirstInOut { copy(overwrites = value) }
-
     @InputFile
     @Optional
     @PathSensitive(PathSensitivity.NONE)
@@ -189,35 +162,8 @@ open class PreprocessTask @Inject constructor(
     @Optional
     val manageImports = objects.property<Boolean>()
 
-    @Deprecated(
-        "Instead add an entry to `entries`.",
-        replaceWith = ReplaceWith(expression = "entry(project.file(file), generated, overwrites)")
-    )
-    fun source(file: Any) {
-        @Suppress("DEPRECATION")
-        source = layout.files(file)
-    }
-
-    @Deprecated(
-        "Instead add an entry to `entries`.",
-        replaceWith = ReplaceWith(expression = "entry(source, project.file(file), overwrites)")
-    )
-    fun generated(file: Any) {
-        @Suppress("DEPRECATION")
-        generated = layout.files(file).singleFile
-    }
-
     fun entry(source: FileCollection, generated: File, overwrites: File) {
         entries.add(InOut(source, generated, overwrites))
-    }
-
-    @Deprecated(
-        "Unnecessarily depends on the task output. Instead set `classpath` directly.",
-        replaceWith = ReplaceWith(expression = "classpath = task.classpath")
-    )
-    fun compileTask(task: AbstractCompile) {
-        dependsOn(task)
-        classpath = (classpath ?: project.files()) + task.classpath + project.files(task.destinationDirectory)
     }
 
     @TaskAction
