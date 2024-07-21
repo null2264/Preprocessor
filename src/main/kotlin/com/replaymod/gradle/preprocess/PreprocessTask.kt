@@ -285,6 +285,7 @@ open class PreprocessTask @Inject constructor(
         if (mappings != null) {
             classpath!!
             val javaTransformer = Transformer(mappings)
+            javaTransformer.verboseCompilerMessages = logger.isInfoEnabled
             javaTransformer.patternAnnotation = patternAnnotation.orNull
             javaTransformer.manageImports = manageImports.getOrElse(false)
             javaTransformer.jdkHome = jdkHome.orNull?.asFile
