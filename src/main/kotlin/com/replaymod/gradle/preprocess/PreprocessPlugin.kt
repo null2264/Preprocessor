@@ -360,14 +360,8 @@ private val Project.intermediaryMappings: Mappings?
                 Mappings("searge", (output as RegularFileProperty).get().asFile, "tsrg2", listOf(it))
             }
         }
-        mappingsProvider?.maybeGetGroovyProperty("tinyMappingsWithSrg")?.let { // architectury
-            val file = (it as Path).toFile()
-            if (file.exists()) {
-                return Mappings("searge", file, "tiny", emptyList())
-            }
-        }
-        tinyMappings?.let { return Mappings("yarn", it, "tiny", emptyList()) }
-        return null
+        tinyMappingsWithSrg?.let { return Mappings("searge", it, "tiny", emptyList()) }
+        return Mappings("yarn", tinyMappings, "tiny", emptyList())
     }
 
 data class Mappings(val type: String, val file: File, val format: String, val tasks: List<Task>)
@@ -411,6 +405,17 @@ private val Project.tinyMappings: File?
             }
         }
         throw GradleException("loom version not supported by preprocess plugin")
+    }
+
+private val Project.tinyMappingsWithSrg: File?
+    get() {
+        mappingsProvider.maybeGetGroovyProperty("tinyMappingsWithSrg")?.let { // architectury
+            val file = (it as Path).toFile()
+            if (file.exists()) {
+                return file
+            }
+        }
+        return null
     }
 
 private val Task.classpath: FileCollection?
