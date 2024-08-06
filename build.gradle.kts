@@ -15,20 +15,18 @@
  */
 
 plugins {
+    groovy
     kotlin("jvm") version("2.0.0")
     `kotlin-dsl`
-    `maven-publish`
-    groovy
+    val dgtVersion = "2.5.0"
+    id("dev.deftu.gradle.tools") version(dgtVersion)
+    id("dev.deftu.gradle.tools.publishing.maven") version(dgtVersion)
 }
-
-group = "dev.deftu"
-version = "0.6.1"
 
 val kotestVersion: String by project.extra
 
 java {
     withSourcesJar()
-    toolchain.languageVersion.set(JavaLanguageVersion.of(8))
 }
 
 repositories {
@@ -36,14 +34,14 @@ repositories {
     mavenCentral()
     maven(url = "https://jitpack.io/")
     maven(url = "https://maven.fabricmc.net/")
-    maven(url = "https://maven.deftu.xyz/releases/")
+    maven(url = "https://maven.deftu.dev/releases/")
 }
 
 dependencies {
     implementation(gradleApi())
     implementation(localGroovy())
-    implementation("dev.deftu:Remap:0.2.2")
-    implementation("net.fabricmc:tiny-mappings-parser:0.2.1.13")
+    implementation("dev.deftu:remap:0.3.0")
+    implementation("net.fabricmc:mapping-io:0.6.1")
     testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
@@ -58,41 +56,6 @@ gradlePlugin {
         register("preprocess-root") {
             id = "dev.deftu.gradle.preprocess-root"
             implementationClass = "com.replaymod.gradle.preprocess.RootPreprocessPlugin"
-        }
-    }
-}
-
-publishing {
-    val publishingUsername: String? = run {
-        return@run project.findProperty("deftu.publishing.username")?.toString() ?: System.getenv("DEFTU_PUBLISHING_USERNAME")
-    }
-
-    val publishingPassword: String? = run {
-        return@run project.findProperty("deftu.publishing.password")?.toString() ?: System.getenv("DEFTU_PUBLISHING_PASSWORD")
-    }
-
-    repositories {
-        mavenLocal()
-        if (publishingUsername != null && publishingPassword != null) {
-            fun MavenArtifactRepository.applyCredentials() {
-                authentication.create<BasicAuthentication>("basic")
-                credentials {
-                    username = publishingUsername
-                    password = publishingPassword
-                }
-            }
-
-            maven {
-                name = "DeftuReleases"
-                url = uri("https://maven.deftu.dev/releases")
-                applyCredentials()
-            }
-
-            maven {
-                name = "DeftuSnapshots"
-                url = uri("https://maven.deftu.dev/snapshots")
-                applyCredentials()
-            }
         }
     }
 }

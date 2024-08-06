@@ -24,7 +24,6 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
-import java.util.Locale
 import java.util.stream.Collectors
 
 class PreprocessPlugin : Plugin<Project> {
@@ -44,7 +43,7 @@ class PreprocessPlugin : Plugin<Project> {
         val coreProject = coreProjectFile.readText().trim()
         val mcVersion = projectNode.mcVersion
         project.extra["mcVersion"] = mcVersion
-        val ext = project.extensions.create("preprocess", PreprocessExtension::class, project.objects, mcVersion)
+        val ext = project.extensions.create("preprocess", PreprocessExtension::class, project, project.objects, mcVersion)
 
         val kotlin = project.plugins.hasPlugin("kotlin")
 
@@ -387,7 +386,7 @@ private fun readMappings(format: String, path: Path): MappingSet {
     }
 }
 
-private val Project.intermediaryMappings: Mappings?
+private val Project.intermediaryMappings: Mappings
     get() {
         project.tasks.findByName("genSrgs")?.let { // FG2
             return Mappings("searge", it.property("mcpToSrg") as File, "srg", listOf(it))
