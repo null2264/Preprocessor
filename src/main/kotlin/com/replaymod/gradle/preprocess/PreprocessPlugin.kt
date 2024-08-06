@@ -294,7 +294,6 @@ internal class MappingsFile(
     @PathSensitive(PathSensitivity.NONE)
     val file: File,
 )
-
 private fun Mappings.toFile() = MappingsFile(type, format, file)
 
 @CacheableTask
@@ -337,7 +336,7 @@ internal abstract class BakeNamedToOfficialMappings : DefaultTask() {
             val tiny = MemoryMappingTree().also { MappingReader.read(mappings.file.toPath(), it) }
             TinyReader(tiny, "named", "official").read()
         } else {
-            val iMappings = namedToIntermediaryMappings.get()!!
+            val iMappings = namedToIntermediaryMappings.get()
             val iMapSet = readMappings(iMappings.format, iMappings.file.toPath())
             val oMapSet = readMappings(mappings.format, mappings.file.toPath())
             oMapSet.join(iMapSet.reverse()).reverse()
@@ -420,26 +419,28 @@ private val Project.notchMappings: Mappings?
                 Mappings("notch", (output as RegularFileProperty).get().asFile, "tsrg2", listOf(it))
             }
         }
-        tinyMappings?.let { return Mappings("notch", it, "tiny", emptyList()) }
-        return null
+        return Mappings("notch", tinyMappings, "tiny", emptyList())
     }
 
-private val Project.mappingsProvider: Any?
+private val Project.mappingsProvider: Any
     get() {
-        val extension = extensions.findByName("loom") ?: extensions.findByName("minecraft") ?: return null
-        if (!extension.javaClass.name.contains("LoomGradleExtension")) return null
+        val extension = extensions.findByName("loom") ?: extensions.findByName("minecraft")
+        ?: throw UnsupportedLoom("Expected `loom` or `minecraft` extension")
+        if (!extension.javaClass.name.contains("LoomGradleExtension")) {
+            throw UnsupportedLoom("Unexpected extension class name: ${extension.javaClass.name}")
+        }
         listOf(
             "mappingConfiguration", // Fabric Loom 1.1+
             "mappingsProvider", // Fabric Loom pre 1.1
         ).forEach { pro ->
             extension.maybeGetGroovyProperty(pro)?.also { return it }
         }
-        return null
+        throw UnsupportedLoom("Failed to find mappings provider")
     }
 
-private val Project.tinyMappings: File?
+private val Project.tinyMappings: File
     get() {
-        val mappingsProvider = mappingsProvider ?: return null
+        val mappingsProvider = mappingsProvider
         mappingsProvider.maybeGetGroovyProperty("MAPPINGS_TINY")?.let { return it as File } // loom 0.2.5
         mappingsProvider.maybeGetGroovyProperty("tinyMappings")?.also {
             when (it) {
@@ -447,7 +448,7 @@ private val Project.tinyMappings: File?
                 is Path -> return it.toFile() // loom 0.10.17
             }
         }
-        throw GradleException("loom version not supported by preprocess plugin")
+        throw UnsupportedLoom("Failed to find tiny mappings file")
     }
 
 private val Project.tinyMappingsWithSrg: File?
