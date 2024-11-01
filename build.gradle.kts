@@ -74,10 +74,6 @@ if (ENV("S3_ENDPOINT") != null) {
 }
 
 publishing {
-    val publishingPassword: String? = run {
-        return@run System.getenv("MAVEN_PASS")
-    }
-
     repositories {
         mavenLocal()
         if (ENV("AWS_ACCESS_KEY") != null && ENV("AWS_SECRET_KEY") != null) {
