@@ -17,10 +17,12 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version("1.9.0")
-    `kotlin-dsl`
-    `maven-publish`
     groovy
+    kotlin("jvm") version("2.0.0")
+    `kotlin-dsl`
+    val dgtVersion = "2.5.0"
+    id("dev.deftu.gradle.tools") version(dgtVersion)
+    id("dev.deftu.gradle.tools.publishing.maven") version(dgtVersion)
 }
 
 val ENV = { key: String -> System.getenv(key) }
@@ -51,8 +53,8 @@ repositories {
 dependencies {
     implementation(gradleApi())
     implementation(localGroovy())
-    implementation("io.github.null2264:remap:1.0-SNAPSHOT")
-    implementation("net.fabricmc:tiny-mappings-parser:0.3.0+build.17")
+    implementation("io.github.null2264:remap:1.0.1")
+    implementation("net.fabricmc:mapping-io:0.6.1")
     testImplementation("io.kotest:kotest-runner-junit5-jvm:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
 }
@@ -70,7 +72,6 @@ gradlePlugin {
         }
     }
 }
-
 
 if (ENV("S3_ENDPOINT") != null) {
 	System.setProperty("org.gradle.s3.endpoint", ENV("S3_ENDPOINT"))

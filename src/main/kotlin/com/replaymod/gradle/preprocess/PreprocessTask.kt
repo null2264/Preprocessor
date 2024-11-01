@@ -3,15 +3,19 @@ package com.replaymod.gradle.preprocess
 import com.replaymod.gradle.remap.Transformer
 import com.replaymod.gradle.remap.legacy.LegacyMapping
 import com.replaymod.gradle.remap.legacy.LegacyMappingSetModelFactory
+import net.fabricmc.mappingio.MappedElementKind
+import net.fabricmc.mappingio.MappingReader
+import net.fabricmc.mappingio.tree.MappingTree
+import net.fabricmc.mappingio.tree.MemoryMappingTree
 import org.cadixdev.lorenz.MappingSet
-import org.cadixdev.lorenz.io.MappingFormats
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
-import org.gradle.api.file.ConfigurableFileTree
 import org.gradle.api.file.FileCollection
+import org.gradle.api.file.FileSystemOperations
+import org.gradle.api.file.FileTree
+import org.gradle.api.file.ProjectLayout
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.tasks.*
-import org.gradle.api.tasks.compile.AbstractCompile
-import org.gradle.kotlin.dsl.listProperty
 import org.gradle.kotlin.dsl.mapProperty
 import org.gradle.kotlin.dsl.property
 import org.jetbrains.kotlin.backend.common.peek
@@ -23,42 +27,48 @@ import java.io.Serializable
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.regex.Pattern
+import javax.inject.Inject
 
 data class Keywords(
-        val disableRemap: String,
-        val enableRemap: String,
-        val `if`: String,
-        val ifdef: String,
-        val elseif: String,
-        val `else`: String,
-        val endif: String,
-        val eval: String
+    val disableRemap: String,
+    val enableRemap: String,
+    val `if`: String,
+    val ifdef: String,
+    val elseif: String,
+    val `else`: String,
+    val endif: String,
+    val eval: String
 ) : Serializable
 
 @CacheableTask
-open class PreprocessTask : DefaultTask() {
+open class PreprocessTask @Inject constructor(
+    private val layout: ProjectLayout,
+    private val fsops: FileSystemOperations,
+    objects: ObjectFactory
+) : DefaultTask() {
     companion object {
         @JvmStatic
         val DEFAULT_KEYWORDS = Keywords(
-                disableRemap = "//#disable-remap",
-                enableRemap = "//#enable-remap",
-                `if` = "//#if",
-                ifdef = "//#ifdef",
-                elseif = "//#elseif",
-                `else` = "//#else",
-                endif = "//#endif",
-                eval = "//$$"
+            disableRemap = "//#disable-remap",
+            enableRemap = "//#enable-remap",
+            `if` = "//#if",
+            ifdef = "//#ifdef",
+            elseif = "//#elseif",
+            `else` = "//#else",
+            endif = "//#endif",
+            eval = "//$$"
         )
+
         @JvmStatic
         val CFG_KEYWORDS = Keywords(
-                disableRemap = "##disable-remap",
-                enableRemap = "##enable-remap",
-                `if` = "##if",
-                ifdef = "##ifdef",
-                elseif = "##elseif",
-                `else` = "##else",
-                endif = "##endif",
-                eval = "#$$"
+            disableRemap = "##disable-remap",
+            enableRemap = "##enable-remap",
+            `if` = "##if",
+            ifdef = "##ifdef",
+            elseif = "##elseif",
+            `else` = "##else",
+            endif = "##endif",
+            eval = "#$$"
         )
 
         private val LOGGER = LoggerFactory.getLogger(PreprocessTask::class.java)
@@ -76,46 +86,21 @@ open class PreprocessTask : DefaultTask() {
     @InputFiles
     @SkipWhenEmpty
     @PathSensitive(PathSensitivity.RELATIVE)
-    fun getSourceFileTrees(): List<ConfigurableFileTree> {
-        return entries.flatMap { it.source }.map { project.fileTree(it) }
+    fun getSourceFileTrees(): List<FileTree> {
+        return entries.flatMap { it.source }.map { layout.files(it).asFileTree }
     }
 
     @InputFiles
     @Optional
     @PathSensitive(PathSensitivity.RELATIVE)
-    fun getOverwritesFileTrees(): List<ConfigurableFileTree> {
-        return entries.mapNotNull { it.overwrites?.let(project::fileTree) }
+    fun getOverwritesFileTrees(): List<FileTree> {
+        return entries.mapNotNull { it.overwrites?.let { layout.files(it).asFileTree } }
     }
 
     @OutputDirectories
     fun getGeneratedDirectories(): List<File> {
         return entries.map { it.generated }
     }
-
-    private fun updateFirstInOut(update: InOut.() -> InOut) {
-        val first = entries.removeFirstOrNull()
-            ?: InOut(project.files(), File("invalid"), null)
-        first.update()
-        entries.add(0, first)
-    }
-
-    @Deprecated("Instead add an entry to `entries`.")
-    @get:Internal
-    var generated: File?
-        get() = entries.firstOrNull()?.generated
-        set(value) = updateFirstInOut { copy(generated = value ?: File("invalid")) }
-
-    @Deprecated("Instead add an entry to `entries`.")
-    @get:Internal
-    var source: FileCollection?
-        get() = entries.firstOrNull()?.source
-        set(value) = updateFirstInOut { copy(source = value ?: project.files()) }
-
-    @Deprecated("Instead add an entry to `entries`.")
-    @get:Internal
-    var overwrites: File?
-        get() = entries.firstOrNull()?.overwrites
-        set(value) = updateFirstInOut { copy(overwrites = value) }
 
     @InputFile
     @Optional
@@ -126,6 +111,14 @@ open class PreprocessTask : DefaultTask() {
     @Optional
     @PathSensitive(PathSensitivity.NONE)
     var destinationMappings: File? = null
+
+    // Note: Requires that source and destination mappings files to be in `tiny` format.
+    @Input
+    @Optional // required if source or destination mappings have more than two namespaces (optional for backwards compat)
+    val intermediateMappingsName = project.objects.property<String>()
+
+    @Input
+    val strictExtraMappings = project.objects.property<Boolean>().convention(false)
 
     @InputFile
     @Optional
@@ -138,12 +131,12 @@ open class PreprocessTask : DefaultTask() {
     @InputDirectory
     @Optional
     @PathSensitive(PathSensitivity.RELATIVE)
-    val jdkHome = project.objects.directoryProperty()
+    val jdkHome = objects.directoryProperty()
 
     @InputDirectory
     @Optional
     @PathSensitive(PathSensitivity.RELATIVE)
-    val remappedjdkHome = project.objects.directoryProperty()
+    val remappedjdkHome = objects.directoryProperty()
 
     @InputFiles
     @Optional
@@ -156,53 +149,37 @@ open class PreprocessTask : DefaultTask() {
     var remappedClasspath: FileCollection? = null
 
     @Input
-    val vars = project.objects.mapProperty<String, Int>()
+    val vars = objects.mapProperty<String, Int>()
 
     @Input
-    val keywords = project.objects.mapProperty<String, Keywords>()
-
-    @Input
-    @Optional
-    val patternAnnotation = project.objects.property<String>()
+    val keywords = objects.mapProperty<String, Keywords>()
 
     @Input
     @Optional
-    val manageImports = project.objects.property<Boolean>()
+    val patternAnnotation = objects.property<String>()
 
-    @Deprecated("Instead add an entry to `entries`.",
-        replaceWith = ReplaceWith(expression = "entry(project.file(file), generated, overwrites)"))
-    fun source(file: Any) {
-        @Suppress("DEPRECATION")
-        source = project.files(file)
-    }
-
-    @Deprecated("Instead add an entry to `entries`.",
-        replaceWith = ReplaceWith(expression = "entry(source, project.file(file), overwrites)"))
-    fun generated(file: Any) {
-        @Suppress("DEPRECATION")
-        generated = project.file(file)
-    }
+    @Input
+    @Optional
+    val manageImports = objects.property<Boolean>()
 
     fun entry(source: FileCollection, generated: File, overwrites: File) {
         entries.add(InOut(source, generated, overwrites))
     }
 
-    @Deprecated("Unnecessarily depends on the task output. Instead set `classpath` directly.",
-        replaceWith = ReplaceWith(expression = "classpath = task.classpath"))
-    fun compileTask(task: AbstractCompile) {
-        dependsOn(task)
-        classpath = (classpath ?: project.files()) + task.classpath + project.files(task.destinationDir)
-    }
-
     @TaskAction
     fun preprocess() {
+        preprocess(mapping, entries)
+    }
+
+    fun preprocess(mapping: File?, entries: List<InOut>) {
         data class Entry(val relPath: String, val inBase: Path, val outBase: Path, val overwritesBase: Path?)
+
         val sourceFiles: List<Entry> = entries.flatMap { inOut ->
             val outBasePath = inOut.generated.toPath()
             val overwritesBasePath = inOut.overwrites?.toPath()
             inOut.source.flatMap { inBase ->
                 val inBasePath = inBase.toPath()
-                project.fileTree(inBase).map { file ->
+                layout.files(inBase).asFileTree.map { file ->
                     val relPath = inBasePath.relativize(file.toPath())
                     Entry(relPath.toString(), inBasePath, outBasePath, overwritesBasePath)
                 }
@@ -211,20 +188,65 @@ open class PreprocessTask : DefaultTask() {
 
         var mappedSources: Map<String, Pair<String, List<Pair<Int, String>>>>? = null
 
-        val mapping = mapping
         val classpath = classpath
-        if (classpath != null && (mapping != null || sourceMappings != null && destinationMappings != null)) {
-            val mappings = if (mapping != null) {
+        val sourceMappingsFile = sourceMappings
+        val destinationMappingsFile = destinationMappings
+        val mappings = if (intermediateMappingsName.isPresent && classpath != null && sourceMappingsFile != null && destinationMappingsFile != null) {
+            val sharedMappingsNamespace = intermediateMappingsName.get()
+            val srcTree = MemoryMappingTree().also { MappingReader.read(sourceMappingsFile.toPath(), it) }
+            val dstTree = MemoryMappingTree().also { MappingReader.read(destinationMappingsFile.toPath(), it) }
+            if (strictExtraMappings.get()) {
+                if (sharedMappingsNamespace == "srg") {
+                    inferSharedClassMappings(srcTree, dstTree, sharedMappingsNamespace)
+                }
+                srcTree.setIndexByDstNames(true)
+                dstTree.setIndexByDstNames(true)
+                val extTree = mapping?.let { file ->
+                    try {
+                        val ast = ExtraMapping.read(file.toPath())
+                        if (!reverseMapping) {
+                            ast.resolve(logger, srcTree, dstTree, "named", sharedMappingsNamespace).first
+                        } else {
+                            ast.resolve(logger, dstTree, srcTree, "named", sharedMappingsNamespace).second
+                        }
+                    } catch (e: Exception) {
+                        throw GradleException("Failed to parse $file: ${e.message}", e)
+                    }
+                } ?: MemoryMappingTree().apply { visitNamespaces("source", listOf("destination")) }
+                val mrgTree = mergeMappings(srcTree, dstTree, extTree, sharedMappingsNamespace)
+                TinyReader(mrgTree, "source", "destination").read()
+            } else {
+                val sourceMappings = TinyReader(srcTree, "named", sharedMappingsNamespace).read()
+                val destinationMappings = TinyReader(dstTree, "named", sharedMappingsNamespace).read()
+                if (mapping != null) {
+                    val legacyMap = LegacyMapping.readMappingSet(mapping.toPath(), reverseMapping)
+                    val clsMap = legacyMap.splitOffClassMappings()
+                    val srcMap = sourceMappings
+                    val dstMap = destinationMappings
+                    legacyMap.mergeBoth(
+                        // The inner clsMap is to make the join work, the outer one for custom classes (which are not part of
+                        // dstMap and would otherwise be filtered by the join)
+                        srcMap.mergeBoth(clsMap).join(dstMap.reverse()).mergeBoth(clsMap),
+                        MappingSet.create(LegacyMappingSetModelFactory()))
+                } else {
+                    val srcMap = sourceMappings!!
+                    val dstMap = destinationMappings!!
+                    srcMap.join(dstMap.reverse())
+                }
+            }
+        } else if (!intermediateMappingsName.isPresent && classpath != null && (mapping != null || sourceMappings != null && destinationMappings != null)) {
+            if (mapping != null) {
                 if (sourceMappings != null && destinationMappings != null) {
                     val legacyMap = LegacyMapping.readMappingSet(mapping.toPath(), reverseMapping)
                     val clsMap = legacyMap.splitOffClassMappings()
                     val srcMap = sourceMappings!!.readMappings()
                     val dstMap = destinationMappings!!.readMappings()
                     legacyMap.mergeBoth(
-                            // The inner clsMap is to make the join work, the outer one for custom classes (which are not part of
-                            // dstMap and would otherwise be filtered by the join)
-                            srcMap.mergeBoth(clsMap).join(dstMap.reverse()).mergeBoth(clsMap),
-                            MappingSet.create(LegacyMappingSetModelFactory()))
+                        // The inner clsMap is to make the join work, the outer one for custom classes (which are not part of
+                        // dstMap and would otherwise be filtered by the join)
+                        srcMap.mergeBoth(clsMap).join(dstMap.reverse()).mergeBoth(clsMap),
+                        MappingSet.create(LegacyMappingSetModelFactory())
+                    )
                 } else {
                     LegacyMapping.readMappingSet(mapping.toPath(), reverseMapping)
                 }
@@ -233,10 +255,13 @@ open class PreprocessTask : DefaultTask() {
                 val dstMap = destinationMappings!!.readMappings()
                 srcMap.join(dstMap.reverse())
             }
-            MappingFormats.SRG.write(mappings, project.buildDir.resolve(name).resolve("mapping.srg").toPath().also {
-                Files.createDirectories(it.parent)
-            })
+        } else {
+            null
+        }
+        if (mappings != null) {
+            classpath!!
             val javaTransformer = Transformer(mappings)
+            javaTransformer.verboseCompilerMessages = logger.isInfoEnabled
             javaTransformer.patternAnnotation = patternAnnotation.orNull
             javaTransformer.manageImports = manageImports.getOrElse(false)
             javaTransformer.jdkHome = jdkHome.orNull?.asFile
@@ -246,7 +271,7 @@ open class PreprocessTask : DefaultTask() {
                 if (it.exists()) {
                     it.absolutePath.also(LOGGER::debug)
                 } else {
-                    LOGGER.debug("$it (file does not exist)")
+                    LOGGER.debug("{} (file does not exist)", it)
                     null
                 }
             }.toTypedArray()
@@ -255,7 +280,7 @@ open class PreprocessTask : DefaultTask() {
                 if (it.exists()) {
                     it.absolutePath.also(LOGGER::debug)
                 } else {
-                    LOGGER.debug("$it (file does not exist)")
+                    LOGGER.debug("{} (file does not exist)", it)
                     null
                 }
             }?.toTypedArray()
@@ -269,17 +294,17 @@ open class PreprocessTask : DefaultTask() {
                     val kws = keywords.get().entries.find { (ext, _) -> relPath.endsWith(ext) }
                     if (kws != null) {
                         processedSources[relPath] = CommentPreprocessor(vars.get()).convertSource(
-                                kws.value,
-                                lines,
-                                lines.map { Pair(it, emptyList()) },
-                                relPath
+                            kws.value,
+                            lines,
+                            lines.map { Pair(it, emptyList()) },
+                            relPath
                         ).joinToString("\n")
                     }
                 }
             }
             val overwritesFiles = entries
                 .mapNotNull { it.overwrites }
-                .flatMap { base -> project.fileTree(base).map { Pair(base.toPath(), it) } }
+                .flatMap { base -> layout.files(base).asFileTree.map { Pair(base.toPath(), it) } }
             overwritesFiles.forEach { (base, file) ->
                 if (file.name.endsWith(".java") || file.name.endsWith(".kt")) {
                     val relPath = base.relativize(file.toPath())
@@ -289,7 +314,9 @@ open class PreprocessTask : DefaultTask() {
             mappedSources = javaTransformer.remap(sources, processedSources)
         }
 
-        project.delete(entries.map { it.generated })
+        fsops.delete {
+            delete(entries.map { it.generated })
+        }
 
         val commentPreprocessor = CommentPreprocessor(vars.get())
         sourceFiles.forEach { (relPath, inBase, outBase, overwritesPath) ->
@@ -311,7 +338,7 @@ open class PreprocessTask : DefaultTask() {
                 }
                 commentPreprocessor.convertFile(kws.value, file, outFile, javaTransform)
             } else {
-                project.copy {
+                fsops.copy {
                     from(file)
                     into(outFile.parentFile)
                 }
@@ -321,6 +348,254 @@ open class PreprocessTask : DefaultTask() {
         if (commentPreprocessor.fail) {
             throw GradleException("Failed to remap sources. See errors above for details.")
         }
+    }
+
+    /**
+     * Tries to infer shared classes based on shared members.
+     *
+     * Forge uses intermediate mappings ("SRG", same as the original file format they came in) which do not contain
+     * intermediate names for classes, only methods and fields. As such, one would have to manually declare mappings
+     * for all classes one cares about.
+     * It does however still track methods and fields even when the class name changes, so we can make use of those
+     * to infer a good deal of class mappings automatically.
+     *
+     * This method infers these mappings, and updates the input trees to use them.
+     */
+    private fun inferSharedClassMappings(
+        srcTree: MemoryMappingTree,
+        dstTree: MemoryMappingTree,
+        sharedNamespace: String,
+    ) {
+        val srcNsId = srcTree.getNamespaceId(sharedNamespace)
+        val dstNsId = dstTree.getNamespaceId(sharedNamespace)
+
+        val done = mutableSetOf<String>()
+
+        // Check for classes which didn't change their name (presumably)
+        for (srcCls in srcTree.classes) {
+            val srcName = srcCls.getName(srcNsId)!!
+            if (dstTree.getClass(srcName, dstNsId) != null) {
+                done.add(srcName)
+            }
+        }
+
+        // This isn't entirely straightforward though because inherited methods (and their synthetic overload methods)
+        // have the same names as super methods, so we can't just assume a match on the first shared method.
+        // Instead, we'll do multiple rounds and in each one we only pair those classes that unambiguously match.
+        var nextSharedId = 0
+        do {
+            val doneBeforeRound = done.size
+
+            val srcMemberToClass = mutableMapOf<String, MutableList<String>>()
+            for (cls in srcTree.classes) {
+                val clsName = cls.getName(srcNsId)!!
+                if (clsName in done) {
+                    continue
+                }
+                for (field in cls.fields) {
+                    val name = field.getName(srcNsId)!!
+                    if (!name.startsWith("field_")) continue
+                    srcMemberToClass.getOrPut(name, ::mutableListOf).add(clsName)
+                }
+                for (method in cls.methods) {
+                    val name = method.getName(srcNsId)!!
+                    if (!name.startsWith("func_")) continue
+                    srcMemberToClass.getOrPut(name, ::mutableListOf).add(clsName)
+                }
+            }
+            val dstMemberToClass = mutableMapOf<String, MutableList<String>>()
+            for (cls in dstTree.classes) {
+                val clsName = cls.getName(dstNsId)!!
+                if (clsName in done) {
+                    continue
+                }
+                for (field in cls.fields) {
+                    val name = field.getName(dstNsId)!!
+                    if (!name.startsWith("field_")) continue
+                    dstMemberToClass.getOrPut(name, ::mutableListOf).add(clsName)
+                }
+                for (method in cls.methods) {
+                    val name = method.getName(dstNsId)!!
+                    if (!name.startsWith("func_")) continue
+                    dstMemberToClass.getOrPut(name, ::mutableListOf).add(clsName)
+                }
+            }
+
+            val srcMappings = tryInferMapping(srcTree, srcNsId, dstMemberToClass, done)
+            val dstMappings = tryInferMapping(dstTree, dstNsId, srcMemberToClass, done)
+
+            for ((srcName, dstNames) in srcMappings) {
+                if (dstNames.isEmpty()) {
+                    continue
+                }
+                if (dstNames.size > 1) {
+                    // println("Multiple dst classes for $srcName: $dstNames")
+                    continue
+                }
+                val dstName = dstNames.single()
+
+                val revSrcNames = dstMappings.getValue(dstName)
+                assert(revSrcNames.isNotEmpty())
+                if (revSrcNames.size > 1) {
+                    // println("Multiple src classes for $dstName: $revSrcNames")
+                    continue
+                }
+                val revSrcName = revSrcNames.single()
+                if (revSrcName != srcName) {
+                    // println("Conflicting mappings $srcName -> $dstName -> $revSrcName")
+                    continue
+                }
+
+                val srcCls = srcTree.getClass(srcName, srcNsId)!!
+                val dstCls = dstTree.getClass(dstName, dstNsId)!!
+
+                val sharedName = "class_${nextSharedId++}"
+                // println("Discovered mapping $srcName -> $dstName, assigning $sharedName")
+                srcCls.setDstName(sharedName, srcNsId)
+                dstCls.setDstName(sharedName, dstNsId)
+                done.add(sharedName)
+            }
+        } while (done.size > doneBeforeRound)
+    }
+
+    private fun tryInferMapping(
+        srcTree: MappingTree,
+        srcNsId: Int,
+        dstMemberToClass: Map<String, List<String>>,
+        done: Set<String>,
+    ): Map<String, Collection<String>> {
+        val results = mutableMapOf<String, Collection<String>>()
+        for (srcCls in srcTree.classes) {
+            val srcName = srcCls.getName(srcNsId)!!
+            if (srcName in done) {
+                continue
+            }
+
+            val candidates = mutableMapOf<String, Int>()
+
+            for (srcField in srcCls.fields) {
+                for (dstCls in dstMemberToClass[srcField.getName(srcNsId)!!] ?: emptyList()) {
+                    candidates.compute(dstCls) { _, n -> (n ?: 0) + 1 }
+                }
+            }
+            for (srcMethod in srcCls.methods) {
+                for (dstCls in dstMemberToClass[srcMethod.getName(srcNsId)!!] ?: emptyList()) {
+                    candidates.compute(dstCls) { _, n -> (n ?: 0) + 1 }
+                }
+            }
+
+            if (candidates.isEmpty()) {
+                results[srcName] = emptyList()
+                continue
+            }
+
+            val (bestName, bestCount) = candidates.maxBy { it.value }
+            if (candidates.all { (name, count) -> name === bestName || count < bestCount }) {
+                results[srcName] = listOf(bestName)
+            } else {
+                results[srcName] = candidates.keys
+            }
+        }
+        return results
+    }
+
+    private fun mergeMappings(
+        srcTree: MappingTree,
+        dstTree: MappingTree,
+        extTree: MemoryMappingTree,
+        sharedNamespace: String,
+    ): MappingTree {
+        val srcNamedNsId = srcTree.getNamespaceId("named")
+        val srcSharedNsId = srcTree.getNamespaceId(sharedNamespace)
+        val dstSharedNsId = dstTree.getNamespaceId(sharedNamespace)
+        val dstNamedNsId = dstTree.getNamespaceId("named")
+        val extSrcNsId = extTree.getNamespaceId("source")
+        val extDstNsId = extTree.getNamespaceId("destination")
+
+        val tmpTree = MemoryMappingTree()
+        tmpTree.visitNamespaces(dstTree.srcNamespace, dstTree.dstNamespaces)
+        val mrgTree = MemoryMappingTree()
+        mrgTree.visitNamespaces("source", listOf("destination"))
+
+        fun injectExtraMembers(extCls: MappingTree.ClassMapping) {
+            for (extField in extCls.fields) {
+                val srcName = extField.getName(extSrcNsId)
+                val srcDesc = extField.getDesc(extSrcNsId)
+                if (srcDesc == null) {
+                    logger.error("Owner ${extCls.getName(extSrcNsId)} of field $srcName does not appear to have any mappings. " +
+                        "As such, you must provide the full signature of this method manually " +
+                        "(if it does not change across versions, providing it for either version is sufficient).")
+                    continue
+                }
+                mrgTree.visitField(srcName, srcDesc)
+                mrgTree.visitDstName(MappedElementKind.FIELD, 0, extField.getName(extDstNsId))
+            }
+            for (extMethod in extCls.methods) {
+                val srcName = extMethod.getName(extSrcNsId)
+                val srcDesc = extMethod.getDesc(extSrcNsId)
+                if (srcDesc == null) {
+                    logger.error("Owner ${extCls.getName(extSrcNsId)} of method $srcName does not appear to have any mappings. " +
+                        "As such, you must provide the full signature of this method manually " +
+                        "(if it does not change across versions, providing it for either version is sufficient).")
+                    continue
+                }
+                mrgTree.visitMethod(srcName, srcDesc)
+                mrgTree.visitDstName(MappedElementKind.METHOD, 0, extMethod.getName(extDstNsId))
+            }
+        }
+
+        for (srcCls in srcTree.classes) {
+            val extCls = extTree.removeClass(srcCls.getName(srcNamedNsId))
+            val dstCls = if (extCls != null) {
+                val dstName = extCls.getName(extDstNsId)
+                dstTree.getClass(dstName, dstNamedNsId) ?: run {
+                    tmpTree.visitClass(dstName)
+                    tmpTree.visitDstName(MappedElementKind.CLASS, dstNamedNsId, dstName)
+                    tmpTree.getClass(dstName)!!
+                }
+            } else {
+                dstTree.getClass(srcCls.getName(srcSharedNsId), dstSharedNsId) ?: continue
+            }
+            mrgTree.visitClass(srcCls.getName(srcNamedNsId))
+            mrgTree.visitDstName(MappedElementKind.CLASS, 0, dstCls.getName(dstNamedNsId))
+            for (srcField in srcCls.fields) {
+                val extField = extCls?.getField(srcField.getName(srcNamedNsId), srcField.getDesc(srcNamedNsId), extSrcNsId)
+                if (extField != null) {
+                    extCls.removeField(extField.srcName, extField.srcDesc)
+                    mrgTree.visitField(srcField.getName(srcNamedNsId), srcField.getDesc(srcNamedNsId))
+                    mrgTree.visitDstName(MappedElementKind.FIELD, 0, extField.getName(extDstNsId))
+                    continue
+                }
+                val dstField = dstCls.getField(srcField.getName(srcSharedNsId), srcField.getDesc(srcSharedNsId), dstSharedNsId)
+                    ?: dstCls.getField(srcField.getName(srcSharedNsId), null, dstSharedNsId)
+                    ?: continue
+                mrgTree.visitField(srcField.getName(srcNamedNsId), srcField.getDesc(srcNamedNsId))
+                mrgTree.visitDstName(MappedElementKind.FIELD, 0, dstField.getName(dstNamedNsId))
+            }
+            for (srcMethod in srcCls.methods) {
+                val extMethod = extCls?.getMethod(srcMethod.getName(srcNamedNsId), srcMethod.getDesc(srcNamedNsId), extSrcNsId)
+                if (extMethod != null) {
+                    extCls.removeMethod(extMethod.srcName, extMethod.srcDesc)
+                    mrgTree.visitMethod(srcMethod.getName(srcNamedNsId), srcMethod.getDesc(srcNamedNsId))
+                    mrgTree.visitDstName(MappedElementKind.METHOD, 0, extMethod.getName(extDstNsId))
+                    continue
+                }
+                val dstMethod = dstCls.getMethod(srcMethod.getName(srcSharedNsId), srcMethod.getDesc(srcSharedNsId), dstSharedNsId)
+                    ?: dstCls.getMethod(srcMethod.getName(srcSharedNsId), null, dstSharedNsId)
+                    ?: continue
+                mrgTree.visitMethod(srcMethod.getName(srcNamedNsId), srcMethod.getDesc(srcNamedNsId))
+                mrgTree.visitDstName(MappedElementKind.METHOD, 0, dstMethod.getName(dstNamedNsId))
+            }
+            if (extCls != null) {
+                injectExtraMembers(extCls)
+            }
+        }
+        for (extCls in extTree.classes) {
+            mrgTree.visitClass(extCls.getName(extSrcNsId))
+            mrgTree.visitDstName(MappedElementKind.CLASS, 0, extCls.getName(extDstNsId))
+            injectExtraMembers(extCls)
+        }
+        return mrgTree
     }
 }
 

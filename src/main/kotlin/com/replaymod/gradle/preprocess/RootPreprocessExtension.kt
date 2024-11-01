@@ -1,12 +1,24 @@
 package com.replaymod.gradle.preprocess
 
+import org.gradle.api.Project
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.model.ObjectFactory
+import org.gradle.kotlin.dsl.property
 import java.io.File
 
-open class RootPreprocessExtension : ProjectGraphNodeDSL {
+open class RootPreprocessExtension(project: Project, objects: ObjectFactory) : ProjectGraphNodeDSL {
+    val mainProjectFile: RegularFileProperty = objects.fileProperty()
+
+    val strictExtraMappings = objects.property<Boolean>() // defaults to `false` for backwards compatibility
+
     var rootNode: ProjectGraphNode? = null
         get() = field ?: linkNodes()?.also { field = it }
 
     private val nodes = mutableSetOf<Node>()
+
+    init {
+        mainProjectFile.convention(project.layout.projectDirectory.file("versions/mainProject"))
+    }
 
     fun createNode(project: String, mcVersion: Int, mappings: String): Node {
         return Node(project, mcVersion, mappings).also { nodes.add(it) }
@@ -56,13 +68,13 @@ interface ProjectGraphNodeDSL {
 }
 
 open class ProjectGraphNode(
-        val project: String,
-        val mcVersion: Int,
-        val mappings: String,
-        val links: MutableList<Pair<ProjectGraphNode, Pair<File?, Boolean>>> = mutableListOf()
+    val project: String,
+    val mcVersion: Int,
+    val mappings: String,
+    val links: MutableList<Pair<ProjectGraphNode, Pair<File?, Boolean>>> = mutableListOf()
 ) : ProjectGraphNodeDSL {
     override fun addNode(project: String, mcVersion: Int, mappings: String, extraMappings: File?, invertMappings: Boolean): ProjectGraphNodeDSL =
-            ProjectGraphNode(project, mcVersion, mappings).also { links.add(Pair(it, Pair(extraMappings, invertMappings))) }
+        ProjectGraphNode(project, mcVersion, mappings).also { links.add(Pair(it, Pair(extraMappings, invertMappings))) }
 
     fun findNode(project: String): ProjectGraphNode? = if (project == this.project) {
         this

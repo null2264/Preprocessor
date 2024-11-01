@@ -8,7 +8,7 @@ import java.io.File
 fun File.readMappings(): MappingSet {
     val ext = name.substring(name.lastIndexOf(".") + 1)
     val format = MappingFormats.REGISTRY.values().find { it.standardFileExtension.orElse(null) == ext }
-            ?: throw UnsupportedOperationException("Cannot find mapping format for $this")
+        ?: throw UnsupportedOperationException("Cannot find mapping format for $this")
     return format.read(toPath())
 }
 
@@ -102,6 +102,8 @@ fun <T : ClassMapping<T, *>> ClassMapping<T, *>.mergeBoth(b: ClassMapping<T, *>,
 }
 
 // Like a.merge(b) except that mappings not in b will not be in the result (even if they're in a)
+// Also ignores types for field/method joining (so fields/methods with matching intermediate names will still be mapped
+// even when their types have changed)
 fun MappingSet.join(b: MappingSet, into: MappingSet = MappingSet.create()): MappingSet {
     topLevelClassMappings.forEach { classA ->
         b.getTopLevelClassMapping(classA.deobfuscatedName).ifPresent { classB ->
@@ -115,14 +117,16 @@ fun TopLevelClassMapping.join(b: TopLevelClassMapping, into: MappingSet) {
     val merged = into.getOrCreateTopLevelClassMapping(obfuscatedName)
     merged.deobfuscatedName = b.deobfuscatedName
     fieldMappings.forEach { fieldA ->
-        b.getFieldMapping(fieldA.deobfuscatedSignature).ifPresent { fieldB ->
-            fieldA.join(fieldB, merged)
-        }
+        val fieldB = b.getFieldMapping(fieldA.deobfuscatedSignature).orElse(null)
+            ?: b.getFieldMapping(fieldA.deobfuscatedName).orElse(null)
+            ?: return@forEach
+        fieldA.join(fieldB, merged)
     }
     methodMappings.forEach { methodA ->
-        b.getMethodMapping(methodA.deobfuscatedSignature).ifPresent { methodB ->
-            methodA.join(methodB, merged)
-        }
+        val methodB = b.getMethodMapping(methodA.deobfuscatedSignature).orElse(null)
+            ?: b.methodMappings.find { methodA.deobfuscatedName == it.obfuscatedName }
+            ?: return@forEach
+        methodA.join(methodB, merged)
     }
     innerClassMappings.forEach { classA ->
         b.getInnerClassMapping(classA.deobfuscatedName).ifPresent { classB ->
@@ -135,14 +139,16 @@ fun InnerClassMapping.join(b: InnerClassMapping, into: ClassMapping<*, *>) {
     val merged = into.getOrCreateInnerClassMapping(obfuscatedName)
     merged.deobfuscatedName = b.deobfuscatedName
     fieldMappings.forEach { fieldA ->
-        b.getFieldMapping(fieldA.deobfuscatedSignature).ifPresent { fieldB ->
-            fieldA.join(fieldB, merged)
-        }
+        val fieldB = b.getFieldMapping(fieldA.deobfuscatedSignature).orElse(null)
+            ?: b.getFieldMapping(fieldA.deobfuscatedName).orElse(null)
+            ?: return@forEach
+        fieldA.join(fieldB, merged)
     }
     methodMappings.forEach { methodA ->
-        b.getMethodMapping(methodA.deobfuscatedSignature).ifPresent { methodB ->
-            methodA.join(methodB, merged)
-        }
+        val methodB = b.getMethodMapping(methodA.deobfuscatedSignature).orElse(null)
+            ?: b.methodMappings.find { methodA.deobfuscatedName == it.obfuscatedName }
+            ?: return@forEach
+        methodA.join(methodB, merged)
     }
     innerClassMappings.forEach { classA ->
         b.getInnerClassMapping(classA.deobfuscatedName).ifPresent { classB ->
@@ -153,16 +159,16 @@ fun InnerClassMapping.join(b: InnerClassMapping, into: ClassMapping<*, *>) {
 
 // Like FieldMapping.merge but not horribly slow in newer lorenz versions
 fun FieldMapping.join(with: FieldMapping, parent: ClassMapping<*, *>): FieldMapping =
-        parent.createFieldMapping(signature)
-                .setDeobfuscatedName(with.deobfuscatedName)
+    parent.createFieldMapping(signature)
+        .setDeobfuscatedName(with.deobfuscatedName)
 
 // Like FieldMapping.merge but not horribly slow in newer lorenz versions
 fun MethodMapping.join(with: MethodMapping, parent: ClassMapping<*, *>): MethodMapping =
-        parent.createMethodMapping(signature)
-                .setDeobfuscatedName(with.deobfuscatedName)
-                .also { merged ->
-                    parameterMappings.forEach { paramA ->
-                        val paramB = with.getOrCreateParameterMapping(paramA.index)
-                        paramA.merge(paramB, merged)
-                    }
-                }
+    parent.createMethodMapping(signature)
+        .setDeobfuscatedName(with.deobfuscatedName)
+        .also { merged ->
+            parameterMappings.forEach { paramA ->
+                val paramB = with.getOrCreateParameterMapping(paramA.index)
+                paramA.merge(paramB, merged)
+            }
+        }
