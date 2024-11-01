@@ -32,14 +32,10 @@ version = "1.0.1"
 
 val kotestVersion: String by project.extra
 
-tasks.withType<KotlinCompile>().configureEach {
-    kotlinOptions.jvmTarget = "1.8"
-}
+java.toolchain.languageVersion.set(JavaLanguageVersion.of(17))
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 repositories {
