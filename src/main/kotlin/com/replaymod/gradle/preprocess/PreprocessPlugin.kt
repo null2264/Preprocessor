@@ -43,7 +43,7 @@ class PreprocessPlugin : Plugin<Project> {
         val coreProject = coreProjectFile.readText().trim()
         val mcVersion = projectNode.mcVersion
         project.extra["mcVersion"] = mcVersion
-        val ext = project.extensions.create("preprocess", PreprocessExtension::class, project, project.objects, mcVersion)
+        val ext = project.extensions.create("preprocess", PreprocessExtension::class, project.objects, mcVersion)
 
         val kotlin = project.plugins.hasPlugin("kotlin")
 
