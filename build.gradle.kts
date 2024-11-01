@@ -28,7 +28,7 @@ plugins {
 val ENV = { key: String -> System.getenv(key) }
 
 group = "io.github.null2264"
-version = "1.0-SNAPSHOT"
+version = "1.0.1"
 
 val kotestVersion: String by project.extra
 
